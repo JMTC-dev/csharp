@@ -5,11 +5,12 @@ using System.Threading.Tasks;
 
 namespace UserApi
 {
-    public class User
+    public class User(string username, string email, string password)
     {
-        public required int Id { get; set; }
-        public required string Username { get; set; }
-        public required string Email { get; set; }
-        public required string Password { get; set; }
+        public int Id { get; set; }
+        public string Username { get; set; } = username;
+        public string Email { get; set; } = email;
+        public string Password { get; set; } = password;
+
     }
 }
