@@ -29,13 +29,15 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-app.MapGet("/users", async Task<Ok<List<UserDTO>>> (UserDb db) =>
+var users = app.MapGroup("/users");
+
+users.MapGet("/", async Task<Ok<List<UserDTO>>> (UserDb db) =>
 {
     var listOfUsers = await db.Users.Select((user) => new UserDTO(user)).ToListAsync();
     return TypedResults.Ok(listOfUsers);
 });
 
-app.MapGet("/users/{id}", async Task<Results<Ok<UserDTO>, NotFound>> (int id, UserDb db) =>
+users.MapGet("/{id}", async Task<Results<Ok<UserDTO>, NotFound>> (int id, UserDb db) =>
 {
 
     return await db.Users.FindAsync(id)
@@ -44,7 +46,7 @@ app.MapGet("/users/{id}", async Task<Results<Ok<UserDTO>, NotFound>> (int id, Us
         : TypedResults.NotFound();
 });
 
-app.MapPost("/users", async Task<Created<UserDTO>> (UserCreateRequest newUser, UserDb db, PasswordHasher<User> ph) =>
+users.MapPost("/", async Task<Created<UserDTO>> (UserCreateRequest newUser, UserDb db, PasswordHasher<User> ph) =>
 {
     var hashedPassword = ph.HashPassword(null, newUser.Password);
     var user = new User(newUser.Username, newUser.Email, hashedPassword);
@@ -55,7 +57,7 @@ app.MapPost("/users", async Task<Created<UserDTO>> (UserCreateRequest newUser, U
     return TypedResults.Created($"/users/{user.Id}", new UserDTO(user));
 });
 
-app.MapPatch("/users/{id}", async Task<Results<Ok, NotFound>> (int id, UserDb db, UserUpdateRequest updateUser, PasswordHasher<User> ph) =>
+users.MapPatch("/{id}", async Task<Results<Ok, NotFound>> (int id, UserDb db, UserUpdateRequest updateUser, PasswordHasher<User> ph) =>
 {
     var userToUpdate = await db.Users.FindAsync(id);
     if (userToUpdate == null)
@@ -77,6 +79,22 @@ app.MapPatch("/users/{id}", async Task<Results<Ok, NotFound>> (int id, UserDb db
     await db.SaveChangesAsync();
 
     return TypedResults.Ok();
+
+});
+
+users.MapDelete("/{id}", async Task<Results<NoContent, NotFound>> (int id, UserDb db) =>
+{
+    var userToDelete = await db.Users.FindAsync(id);
+    if (userToDelete == null)
+    {
+        return TypedResults.NotFound();
+    }
+
+    db.Users.Remove(userToDelete);
+
+    await db.SaveChangesAsync();
+
+    return TypedResults.NoContent();
 
 });
 
