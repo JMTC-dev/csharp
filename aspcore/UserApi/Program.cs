@@ -12,7 +12,7 @@ builder.Services.AddSingleton<PasswordHasher<User>>();
 var jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrWhiteSpace(jwtKey))
 {
-    throw new ArgumentException("JWT signing keyt is not configured. Set the Jwt__Key environment variable.");
+    throw new ArgumentException("JWT signing key is not configured. Set the Jwt__Key environment variable.");
 }
 builder.Services.AddAuthentication().AddJwtBearer(options =>
 {
@@ -65,9 +65,19 @@ users.MapGet("/{id}", async Task<Results<Ok<UserDTO>, NotFound>> (int id, UserDb
         : TypedResults.NotFound();
 });
 
-users.MapPost("/", async Task<Created<UserDTO>> (UserCreateRequest newUser, UserDb db, PasswordHasher<User> ph) =>
+users.MapPost("/", async Task<Results<Created<UserDTO>, ProblemHttpResult>> (UserCreateRequest newUser, UserDb db, PasswordHasher<User> ph) =>
 {
+
+    var existingEmail = await db.Users.Where((user) => user.Email == newUser.Email).SingleOrDefaultAsync();
+
+    if (existingEmail != null)
+    {
+        return TypedResults.Problem(title: "Unable to complete request", detail: "The requested operation could not be completed with the provided information.", statusCode: StatusCodes.Status409Conflict);
+    }
+
     var hashedPassword = ph.HashPassword(null, newUser.Password);
+
+
     var user = new User(newUser.Username, newUser.Email, hashedPassword);
 
     db.Users.Add(user);
@@ -76,7 +86,7 @@ users.MapPost("/", async Task<Created<UserDTO>> (UserCreateRequest newUser, User
     return TypedResults.Created($"/users/{user.Id}", new UserDTO(user));
 });
 
-users.MapPatch("/{id}", async Task<Results<Ok, NotFound>> (int id, UserDb db, UserUpdateRequest updateUser, PasswordHasher<User> ph) =>
+users.MapPatch("/{id}", async Task<Results<Ok, NotFound, UnprocessableEntity<string>>> (int id, UserDb db, UserUpdateRequest updateUser, PasswordHasher<User> ph) =>
 {
     var userToUpdate = await db.Users.FindAsync(id);
     if (userToUpdate == null)
@@ -84,8 +94,16 @@ users.MapPatch("/{id}", async Task<Results<Ok, NotFound>> (int id, UserDb db, Us
         return TypedResults.NotFound();
     }
 
+
+
     if (updateUser.Email != null)
     {
+        var existingUserWithEmail = await db.Users.SingleOrDefaultAsync((user) => user.Email == updateUser.Email);
+        if (existingUserWithEmail != null && existingUserWithEmail.Id != id)
+        {
+            return TypedResults.UnprocessableEntity("Email already exists");
+        }
+
         userToUpdate.Email = updateUser.Email;
     }
 
@@ -101,7 +119,7 @@ users.MapPatch("/{id}", async Task<Results<Ok, NotFound>> (int id, UserDb db, Us
 
 });
 
-users.MapDelete("/{id}", async Task<Results<NoContent, NotFound>> (int id, UserDb db) =>
+users.MapDelete("/{id}", async Task<Results<NoContent, ProblemHttpResult>> (int id, UserDb db) =>
 {
     var userToDelete = await db.Users.FindAsync(id);
     if (userToDelete == null)
@@ -114,6 +132,29 @@ users.MapDelete("/{id}", async Task<Results<NoContent, NotFound>> (int id, UserD
     await db.SaveChangesAsync();
 
     return TypedResults.NoContent();
+
+});
+
+app.MapPost("/login", async Task<Results<Ok<string>, UnauthorizedHttpResult>> (LoginRequest userRequest, UserDb db, PasswordHasher<User> ph) =>
+{
+
+    var user = await db.Users.Where((user) => user.Email == userRequest.Email).SingleOrDefaultAsync();
+
+    if (user == null)
+    {
+        return TypedResults.Unauthorized();
+    }
+
+    var validPassword = ph.VerifyHashedPassword(null, user.Password, userRequest.Password);
+
+    if (validPassword == PasswordVerificationResult.Success)
+    {
+        return TypedResults.Ok("Success!");
+    }
+    else
+    {
+        return TypedResults.Unauthorized();
+    }
 
 });
 
