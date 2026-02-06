@@ -26,6 +26,7 @@ builder.Services.AddAuthentication().AddJwtBearer(options =>
         ValidIssuer = "UserApi"
     };
 });
+builder.Services.AddAuthorization();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApiDocument(config =>
 {
@@ -86,12 +87,12 @@ users.MapPost("/", async Task<Results<Created<UserDTO>, ProblemHttpResult>> (Use
     return TypedResults.Created($"/users/{user.Id}", new UserDTO(user));
 });
 
-users.MapPatch("/{id}", async Task<Results<Ok, NotFound, UnprocessableEntity<string>>> (int id, UserDb db, UserUpdateRequest updateUser, PasswordHasher<User> ph) =>
+users.MapPatch("/{id}", async Task<Results<Ok, ProblemHttpResult>> (int id, UserDb db, UserUpdateRequest updateUser, PasswordHasher<User> ph) =>
 {
     var userToUpdate = await db.Users.FindAsync(id);
     if (userToUpdate == null)
     {
-        return TypedResults.NotFound();
+        return TypedResults.Problem(title: "Unable to complete request", detail: "The requested operation could not be completed with the provided information.", statusCode: StatusCodes.Status404NotFound);
     }
 
 
@@ -101,7 +102,7 @@ users.MapPatch("/{id}", async Task<Results<Ok, NotFound, UnprocessableEntity<str
         var existingUserWithEmail = await db.Users.SingleOrDefaultAsync((user) => user.Email == updateUser.Email);
         if (existingUserWithEmail != null && existingUserWithEmail.Id != id)
         {
-            return TypedResults.UnprocessableEntity("Email already exists");
+            return TypedResults.Problem(title: "Unable to complete request", detail: "The requested operation could not be completed with the provided information.", statusCode: StatusCodes.Status409Conflict);
         }
 
         userToUpdate.Email = updateUser.Email;
@@ -124,7 +125,7 @@ users.MapDelete("/{id}", async Task<Results<NoContent, ProblemHttpResult>> (int 
     var userToDelete = await db.Users.FindAsync(id);
     if (userToDelete == null)
     {
-        return TypedResults.NotFound();
+        return TypedResults.Problem(title: "Unable to complete request", detail: "The requested operation could not be completed with the provided information.", statusCode: StatusCodes.Status409Conflict);
     }
 
     db.Users.Remove(userToDelete);
@@ -135,14 +136,14 @@ users.MapDelete("/{id}", async Task<Results<NoContent, ProblemHttpResult>> (int 
 
 });
 
-app.MapPost("/login", async Task<Results<Ok<string>, UnauthorizedHttpResult>> (LoginRequest userRequest, UserDb db, PasswordHasher<User> ph) =>
+app.MapPost("/login", async Task<Results<Ok<string>, ProblemHttpResult>> (LoginRequest userRequest, UserDb db, PasswordHasher<User> ph) =>
 {
 
     var user = await db.Users.Where((user) => user.Email == userRequest.Email).SingleOrDefaultAsync();
 
     if (user == null)
     {
-        return TypedResults.Unauthorized();
+        return TypedResults.Problem(title: "Unable to complete request", detail: "Invalid username or password.", statusCode: StatusCodes.Status401Unauthorized);
     }
 
     var validPassword = ph.VerifyHashedPassword(null, user.Password, userRequest.Password);
@@ -153,7 +154,7 @@ app.MapPost("/login", async Task<Results<Ok<string>, UnauthorizedHttpResult>> (L
     }
     else
     {
-        return TypedResults.Unauthorized();
+        return TypedResults.Problem(title: "Unable to complete request", detail: "Invalid username or password.", statusCode: StatusCodes.Status401Unauthorized);
     }
 
 });
