@@ -35,6 +35,7 @@ builder.Services.AddOpenApiDocument(config =>
     config.Version = "v1";
 });
 
+
 var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
