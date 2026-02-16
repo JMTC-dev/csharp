@@ -126,7 +126,7 @@ users.MapDelete("/{id}", async Task<Results<NoContent, ProblemHttpResult>> (int 
     var userToDelete = await db.Users.FindAsync(id);
     if (userToDelete == null)
     {
-        return TypedResults.Problem(title: "Unable to complete request", detail: "The requested operation could not be completed with the provided information.", statusCode: StatusCodes.Status409Conflict);
+        return TypedResults.Problem(title: "Unable to complete request", detail: "The requested operation could not be completed with the provided information.", statusCode: StatusCodes.Status404NotFound);
     }
 
     db.Users.Remove(userToDelete);
@@ -151,7 +151,8 @@ app.MapPost("/login", async Task<Results<Ok<string>, ProblemHttpResult>> (LoginR
 
     if (validPassword == PasswordVerificationResult.Success)
     {
-        return TypedResults.Ok("Success!");
+        var userToken = new JwtTokenCreator(jwtKey).CreateToken(user);
+        return TypedResults.Ok(userToken);
     }
     else
     {
